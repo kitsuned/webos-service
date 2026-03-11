@@ -1,0 +1,34 @@
+{
+	"name": "@kitsuned/webos-service",
+	"version": "1.0.0",
+	"license": "MIT",
+	"scripts": {
+		"build": "tsc"
+	},
+	"type": "commonjs",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		"node": "./dist/index.js",
+		"types": "./dist/index.d.ts"
+	},
+	"dependencies": {
+		"@kitsuned/async-utils": "^1.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "0.12.25",
+		"typescript": "5.9.3"
+	},
+	"files": [
+		"src/palmbus.d.ts",
+		"dist",
+		"LICENSE",
+		"README.md",
+		"package.json"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/kitsuned/webos-service.git"
+	},
+	"packageManager": "yarn@4.13.0"
+}
