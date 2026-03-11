@@ -1,6 +1,6 @@
 {
 	"name": "@kitsuned/webos-service",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"license": "MIT",
 	"scripts": {
 		"build": "tsc"
@@ -16,7 +16,7 @@
 		"@kitsuned/async-utils": "^1.0.0"
 	},
 	"devDependencies": {
-		"@types/node": "0.12.25",
+		"@types/node": "25.4.0",
 		"typescript": "5.9.3"
 	},
 	"files": [

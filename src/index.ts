@@ -8,7 +8,11 @@ import { AsyncSink } from '@kitsuned/async-utils';
 import { Message } from './message';
 import { IdleTimer } from './idle-timer';
 
-export type Executor<B, R> = (body: B) => AsyncGenerator<unknown, R> | Promise<R>;
+type AnyRecord = Record<string, any>;
+
+export type Executor<TReq extends AnyRecord, TResp extends AnyRecord, TNext extends AnyRecord> =
+	(payload: TReq, message: Message<TReq>) =>
+		AsyncGenerator<TNext, TResp> | Promise<TResp> | TResp;
 
 function extractMethodPath(path: string): [string, string] {
 	const lastSlashIndex = path.lastIndexOf('/');
@@ -41,107 +45,166 @@ function readServiceIdFromConfig(): string {
 }
 
 export class Service {
+	public readonly id: string;
+
 	private readonly handle: palmbus.Handle;
-	private readonly serviceId: string;
 	private readonly idleTimer: IdleTimer;
 
-	private readonly methods = new Map<string, Executor<any, any>>();
+	private readonly methods = new Map<string, Executor<any, any, any>>();
+	private readonly pending = new Map<string, Message<any>>();
 
-	public constructor(serviceId?: string, idleTimeout: number | null = null) {
+	public constructor(
+		serviceId?: string,
+		idleTimeout: number | null = null,
+		publicBus: boolean = false,
+	) {
 		this.idleTimer = new IdleTimer(idleTimeout, this.handleQuit.bind(this));
 
-		this.serviceId = serviceId ?? readServiceIdFromConfig();
+		this.id = serviceId ?? readServiceIdFromConfig();
 
-		this.handle = new palmbus.Handle(this.serviceId);
+		this.handle = new palmbus.Handle(this.id, publicBus);
 
 		this.handle.addListener('request', this.handleRequest.bind(this));
+		this.handle.addListener('cancel', this.handleCancel.bind(this));
 	}
 
-	public register<T, N extends Record<string, any> = Record<string, any>>(
+	public register<
+		TReq extends AnyRecord,
+		TResp extends AnyRecord = AnyRecord,
+		TNext extends AnyRecord = AnyRecord,
+	>(
 		method: string,
-		executor: Executor<T, N>,
+		executor: Executor<TReq, TResp, TNext>,
 	) {
 		this.handle.registerMethod(...extractMethodPath(method));
 
 		this.methods.set(method, executor);
 	}
 
-	public async* subscribe<T extends Record<string, any>>(
+	public subscribe<T extends AnyRecord>(
 		uri: string,
-		params: Record<string, any> = {},
-	): AsyncGenerator<T, void> {
-		const sink = new AsyncSink<T>();
+		params: AnyRecord,
+		callback: (response: T) => void,
+	): () => void {
 		const subscription = this.handle.subscribe(uri, JSON.stringify(params));
 
 		subscription.addListener('response', pMessage => {
-			sink.push(Message.fromPalmMessage<T>(pMessage).payload);
+			const message = Message.fromPalmMessage<T>(pMessage);
+
+			callback(message.payload);
 		});
 
-		this.idleTimer.acquire();
+		return () => subscription.cancel();
+	}
+
+	public async* stream<T extends AnyRecord>(
+		uri: string,
+		params: AnyRecord = { subscribe: true },
+	): AsyncGenerator<T, void> {
+		const sink = new AsyncSink<T>();
+		const cancel = this.subscribe<T>(uri, params, payload => sink.push(payload));
 
 		try {
 			yield* sink;
 		} finally {
-			subscription.cancel();
-			this.idleTimer.release();
+			cancel();
 		}
 	}
 
-	public async oneshot<T extends Record<string, any>>(
+	public async oneshot<T extends AnyRecord>(
 		uri: string,
-		params: Record<string, any> = {},
+		params: AnyRecord = {},
 	): Promise<T> {
-		const generator = this.subscribe<T>(uri, params);
+		const generator = this.stream<T>(uri, params);
 
 		const { value } = await generator.next();
 
 		await generator.return();
 
-		return value!;
+		return value!.payload;
+	}
+
+	private async drainExecutor<
+		TReq extends AnyRecord,
+		TResp extends AnyRecord,
+		TNext extends AnyRecord,
+	>(
+		executor: ReturnType<Executor<TReq, TResp, TNext>>,
+		message: Message<TReq>,
+	) {
+		if (Symbol.asyncIterator in executor) {
+			const isSubscription = message.payload.subscribe === true;
+
+			let it: IteratorResult<TNext, TResp>;
+
+			do {
+				if (message.cancelled) {
+					await executor.throw(new Error('Subscription cancelled'));
+					break;
+				}
+
+				it = await executor.next();
+
+				if (it.done) {
+					message.respond({ returnValue: true, ...it.value });
+				} else if (isSubscription) {
+					message.respond(it.value);
+				}
+			} while (!it.done);
+
+			return;
+		}
+
+		if ('then' in executor) {
+			message.respond({ returnValue: true, ...await executor });
+
+			return;
+		}
+
+		message.respond({ returnValue: true, ...executor });
 	}
 
 	private handleRequest(pMessage: palmbus.Message): void {
 		const message = Message.fromPalmMessage(pMessage);
 
-		this.idleTimer.acquire();
+		// essential to receive 'cancel' event
+		if (pMessage.isSubscription()) {
+			this.handle.subscriptionAdd(pMessage.uniqueToken(), pMessage);
 
-		Promise.resolve(message.payload)
-			.then(async body => {
+			this.pending.set(pMessage.uniqueToken(), message);
+		}
+
+		Promise.resolve(message)
+			.then(async message => {
 				// Luna won't allow calls to unregistered methods
 				const impl = this.methods.get(message.method)!;
 
-				return this.drainExecutor(impl(body), message);
+				this.idleTimer.acquire();
+
+				return this.drainExecutor(impl(message.payload, message), message);
 			})
 			.catch(e => {
-				console.error('Failed to handle message:', e);
-
 				message.respond({
 					returnValue: false,
 					errorCode: -1,
 					errorText: e instanceof Error ? e.message : String(e),
-					errorStack: 'stack' in e.stack ? e.stack : null,
+					errorStack: 'stack' in e.stack ? String(e.stack) : null,
 				});
 			})
-			.finally(() => this.idleTimer.release());
+			.finally(() => {
+				this.pending.delete(pMessage.uniqueToken());
+
+				this.idleTimer.release();
+			});
 	}
 
-	private async drainExecutor<B extends Record<string, any>, R>(executor: ReturnType<Executor<B, R>>, message: Message<B>) {
-		if ('then' in executor) {
-			message.respond({ returnValue: true, ...await executor });
-		} else if (Symbol.asyncIterator in executor) {
-			const isSubscription = message.payload.subscribe === true;
+	private handleCancel(pMessage: palmbus.Message): void {
+		const token = pMessage.uniqueToken();
 
-			let it: IteratorResult<any, R>;
+		const message = this.pending.get(token);
 
-			do {
-				it = await executor.next();
-
-				if (isSubscription || it.done) {
-					message.respond({ returnValue: true, ...it.value });
-				}
-			} while (!it.done);
-		} else {
-			throw new Error(`Unknown handler signature for ${message.method}`);
+		if (message) {
+			message.cancelled = true;
 		}
 	}
 
