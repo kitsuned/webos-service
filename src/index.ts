@@ -124,6 +124,11 @@ export class Service {
 		return value!.payload;
 	}
 
+	public unregister() {
+		this.pending.clear();
+		this.handle.unregister();
+	}
+
 	private async drainExecutor<
 		TReq extends AnyRecord,
 		TResp extends AnyRecord,
