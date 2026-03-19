@@ -14,6 +14,8 @@ export type Executor<TReq extends AnyRecord, TResp extends AnyRecord | void, TNe
 	(payload: TReq, message: Message<TReq>) =>
 		AsyncGenerator<TNext, TResp> | Promise<TResp> | TResp;
 
+export type Client = Pick<Service, 'id' | 'oneshot' | 'subscribe' | 'stream'>;
+
 function extractMethodPath(path: string): [string, string] {
 	const lastSlashIndex = path.lastIndexOf('/');
 
