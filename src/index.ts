@@ -121,7 +121,7 @@ export class Service {
 
 		await generator.return();
 
-		return value!.payload;
+		return value!;
 	}
 
 	public unregister() {
