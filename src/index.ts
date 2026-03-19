@@ -10,7 +10,7 @@ import { IdleTimer } from './idle-timer';
 
 type AnyRecord = Record<string, any>;
 
-export type Executor<TReq extends AnyRecord, TResp extends AnyRecord, TNext extends AnyRecord> =
+export type Executor<TReq extends AnyRecord, TResp extends AnyRecord | void, TNext extends AnyRecord> =
 	(payload: TReq, message: Message<TReq>) =>
 		AsyncGenerator<TNext, TResp> | Promise<TResp> | TResp;
 
@@ -70,7 +70,7 @@ export class Service {
 
 	public register<
 		TReq extends AnyRecord,
-		TResp extends AnyRecord = AnyRecord,
+		TResp extends AnyRecord | void = AnyRecord | void,
 		TNext extends AnyRecord = AnyRecord,
 	>(
 		method: string,
