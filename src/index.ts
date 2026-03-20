@@ -10,6 +10,16 @@ import { IdleTimer } from './idle-timer';
 
 type AnyRecord = Record<string, any>;
 
+export type LunaErrorResponse = {
+	returnValue: false;
+	errorCode?: number;
+	errorText: string;
+};
+
+export type LunaSuccessResponse<T> = { returnValue?: true } & T;
+
+export type LunaResponse<T extends AnyRecord> = LunaSuccessResponse<T> | LunaErrorResponse;
+
 export type Executor<TReq extends AnyRecord, TResp extends AnyRecord | void, TNext extends AnyRecord> =
 	(payload: TReq, message: Message<TReq>) =>
 		AsyncGenerator<TNext, TResp> | Promise<TResp> | TResp;
@@ -86,7 +96,7 @@ export class Service {
 	public subscribe<T extends AnyRecord>(
 		uri: string,
 		params: AnyRecord,
-		callback: (response: T) => void,
+		callback: (response: LunaResponse<T>) => void,
 	): () => void {
 		const subscription = this.handle.subscribe(uri, JSON.stringify(params));
 
@@ -102,8 +112,8 @@ export class Service {
 	public async* stream<T extends AnyRecord>(
 		uri: string,
 		params: AnyRecord = { subscribe: true },
-	): AsyncGenerator<T, void> {
-		const sink = new AsyncSink<T>();
+	): AsyncGenerator<LunaResponse<T>, void> {
+		const sink = new AsyncSink<LunaResponse<T>>();
 		const cancel = this.subscribe<T>(uri, params, payload => sink.push(payload));
 
 		try {
@@ -116,7 +126,7 @@ export class Service {
 	public async oneshot<T extends AnyRecord>(
 		uri: string,
 		params: AnyRecord = {},
-	): Promise<T> {
+	): Promise<LunaResponse<T>> {
 		const generator = this.stream<T>(uri, params);
 
 		const { value } = await generator.next();
