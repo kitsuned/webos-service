@@ -1,6 +1,14 @@
-import type palmbus from 'palmbus';
+export interface PalmMessage {
+	category(): string;
+	method(): string;
+	isSubscription(): boolean;
+	uniqueToken(): string;
+	token(): string;
+	payload(): string;
+	respond(serialized: string): string;
+}
 
-function joinCategoryWithMethod(pMessage: palmbus.Message): string {
+function joinCategoryWithMethod(pMessage: PalmMessage): string {
 	let category = pMessage.category();
 
 	// keep / as is; normalize /example -> /example/
@@ -17,7 +25,7 @@ export class Message<T extends Record<string, any>> {
 
 	public cancelled: boolean = false;
 
-	protected constructor(public readonly ls2Message: palmbus.Message) {
+	protected constructor(public readonly ls2Message: PalmMessage) {
 		this.method = joinCategoryWithMethod(ls2Message);
 		this.payload = JSON.parse(ls2Message.payload());
 	}
@@ -27,7 +35,7 @@ export class Message<T extends Record<string, any>> {
 	}
 
 	public static fromPalmMessage<T extends Record<string, any> = Record<string, any>>(
-		pMessage: palmbus.Message,
+		pMessage: PalmMessage,
 	) {
 		return new Message<T>(pMessage);
 	}
