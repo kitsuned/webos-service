@@ -184,6 +184,10 @@ export class Service {
 		executor: ReturnType<Executor<TReq, TResp, TNext>>,
 		message: Message<TReq>,
 	) {
+		if (typeof executor !== 'object') {
+			executor = {} as TResp;
+		}
+
 		if (Symbol.asyncIterator in executor) {
 			const isSubscription = message.payload.subscribe === true;
 
@@ -199,7 +203,7 @@ export class Service {
 
 				if (it.done) {
 					message.respond({ returnValue: true, ...it.value });
-				} else if (isSubscription) {
+				} else if (isSubscription && it.value) {
 					message.respond(it.value);
 				}
 			} while (!it.done);
@@ -236,6 +240,8 @@ export class Service {
 				return this.drainExecutor(impl(message.payload, message), message);
 			})
 			.catch(e => {
+				console.error('webos-service: handleRequest:', e);
+
 				message.respond({
 					returnValue: false,
 					errorCode: -1,
