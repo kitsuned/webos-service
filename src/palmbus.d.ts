@@ -1,5 +1,5 @@
-declare namespace Palmbus {
-	class Handle {
+declare module 'palmbus' {
+	export class Handle {
 		constructor(busId: string, preAcgPublicBus?: boolean);
 
 		call(uri: string, serialized: string): Call;
@@ -11,7 +11,7 @@ declare namespace Palmbus {
 		unregister(): void;
 	}
 
-	class Message {
+	export class Message {
 		constructor(serialized: string, handle: Handle);
 
 		category(): string;
@@ -23,12 +23,8 @@ declare namespace Palmbus {
 		respond(serialized: string): string;
 	}
 
-	class Call {
+	export class Call {
 		addListener(event: 'response', listener: (message: Message) => void): this;
 		cancel(): void;
 	}
-}
-
-declare module 'palmbus' {
-	export = Palmbus;
 }
