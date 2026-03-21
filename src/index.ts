@@ -66,7 +66,10 @@ export const isLegacyBus = existsSync('/var/run/ls2/ls-hubd.private.pid');
 export class Service {
 	public readonly id: string;
 
-	private readonly handle: palmbus.Handle;
+	private readonly handleOutbound: palmbus.Handle;
+	private readonly handlePublic: palmbus.Handle;
+	private readonly handlePrivate: palmbus.Handle;
+
 	private readonly idleTimer: IdleTimer;
 
 	private readonly methods = new Map<string, Executor<any, any, any>>();
@@ -75,16 +78,31 @@ export class Service {
 	public constructor(
 		serviceId?: string,
 		idleTimeout: number | null = null,
-		publicBus: boolean = false,
+		publicBus: boolean = true,
 	) {
 		this.idleTimer = new IdleTimer(idleTimeout, this.handleQuit.bind(this));
 
 		this.id = serviceId ?? readServiceIdFromConfig();
 
-		this.handle = new palmbus.Handle(this.id, publicBus);
+		if (isLegacyBus) {
+			this.handlePublic = new palmbus.Handle(this.id, true);
+			this.handlePublic.addListener('request', this.handleRequest.bind(this));
+			this.handlePublic.addListener('cancel', this.handleCancel.bind(this));
 
-		this.handle.addListener('request', this.handleRequest.bind(this));
-		this.handle.addListener('cancel', this.handleCancel.bind(this));
+			this.handlePrivate = new palmbus.Handle(this.id, false);
+			this.handlePrivate.addListener('request', this.handleRequest.bind(this));
+			this.handlePrivate.addListener('cancel', this.handleCancel.bind(this));
+		} else {
+			const handle = new palmbus.Handle(this.id);
+
+			handle.addListener('request', this.handleRequest.bind(this));
+			handle.addListener('cancel', this.handleCancel.bind(this));
+
+			this.handlePublic = handle;
+			this.handlePrivate = handle;
+		}
+
+		this.handleOutbound = publicBus ? this.handlePublic : this.handlePrivate;
 	}
 
 	public register<
@@ -94,8 +112,18 @@ export class Service {
 	>(
 		method: string,
 		executor: Executor<TReq, TResp, TNext>,
+		{ bus = 'both' }: { bus?: 'public' | 'private' | 'both' } = {},
 	) {
-		this.handle.registerMethod(...extractMethodPath(method));
+		if (bus === 'public') {
+			this.handlePublic.registerMethod(...extractMethodPath(method));
+		} else if (bus === 'private') {
+			this.handlePrivate.registerMethod(...extractMethodPath(method));
+		} else if (bus === 'both') {
+			if (this.handlePublic !== this.handlePrivate) {
+				this.handlePublic.registerMethod(...extractMethodPath(method));
+			}
+			this.handlePrivate.registerMethod(...extractMethodPath(method));
+		}
 
 		this.methods.set(method, executor);
 	}
@@ -105,7 +133,7 @@ export class Service {
 		params: AnyRecord,
 		callback: (response: LunaResponse<T>) => void,
 	): () => void {
-		const subscription = this.handle.subscribe(uri, JSON.stringify(params));
+		const subscription = this.handleOutbound.subscribe(uri, JSON.stringify(params));
 
 		subscription.addListener('response', pMessage => {
 			const message = Message.fromPalmMessage<T>(pMessage);
@@ -145,7 +173,7 @@ export class Service {
 
 	public unregister() {
 		this.pending.clear();
-		this.handle.unregister();
+		this.handleOutbound.unregister();
 	}
 
 	private async drainExecutor<
@@ -193,7 +221,7 @@ export class Service {
 
 		// essential to receive 'cancel' event
 		if (pMessage.isSubscription()) {
-			this.handle.subscriptionAdd(pMessage.uniqueToken(), pMessage);
+			this.handleOutbound.subscriptionAdd(pMessage.uniqueToken(), pMessage);
 
 			this.pending.set(pMessage.uniqueToken(), message);
 		}
@@ -233,7 +261,7 @@ export class Service {
 	}
 
 	private handleQuit() {
-		this.handle.unregister();
+		this.handleOutbound.unregister();
 
 		process.nextTick(() => process.exit(0));
 	}
