@@ -24,7 +24,12 @@ export type Executor<TReq extends AnyRecord, TResp extends AnyRecord | void, TNe
 	(payload: TReq, message: Message<TReq>) =>
 		AsyncGenerator<TNext, TResp> | Promise<TResp> | TResp;
 
-export type Client = Pick<Service, 'id' | 'oneshot' | 'subscribe' | 'stream'>;
+// it would be nice to export it as an external type-only package with isomorphic Luna client interface
+export type Client = Pick<Service, 'oneshot' | 'subscribe' | 'stream'> & {
+	// technically palmbus service id may be null as well,
+	// but why would anyone want to register such a handle?
+	id: string | null;
+};
 
 function extractMethodPath(path: string): [string, string] {
 	const lastSlashIndex = path.lastIndexOf('/');
