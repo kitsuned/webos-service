@@ -1,6 +1,6 @@
 import palmbus from 'palmbus';
 
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
 import { AsyncSink } from '@kitsuned/async-utils';
@@ -55,6 +55,8 @@ function readServiceIdFromConfig(): string {
 
 	return config.id;
 }
+
+export const isLegacyBus = existsSync('/var/run/ls2/ls-hubd.private.pid');
 
 export class Service {
 	public readonly id: string;
