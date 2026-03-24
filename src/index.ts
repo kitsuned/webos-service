@@ -3,7 +3,7 @@ import palmbus from 'palmbus';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
-import { AsyncSink } from '@kitsuned/async-utils';
+import { LunaClient } from '@kitsuned/webos-luna-isomorphic-client';
 
 import { Message } from './message';
 import { IdleTimer } from './idle-timer';
@@ -23,13 +23,6 @@ export type LunaResponse<T extends AnyRecord> = LunaSuccessResponse<T> | LunaErr
 export type Executor<TReq extends AnyRecord, TResp extends AnyRecord | void, TNext extends AnyRecord> =
 	(payload: TReq, message: Message<TReq>) =>
 		AsyncGenerator<TNext, TResp> | Promise<TResp> | TResp;
-
-// it would be nice to export it as an external type-only package with isomorphic Luna client interface
-export type Client = Pick<Service, 'oneshot' | 'subscribe' | 'stream'> & {
-	// technically palmbus service id may be null as well,
-	// but why would anyone want to register such a handle?
-	id: string | null;
-};
 
 function extractMethodPath(path: string): [string, string] {
 	const lastSlashIndex = path.lastIndexOf('/');
@@ -63,7 +56,7 @@ function readServiceIdFromConfig(): string {
 
 export const isLegacyBus = existsSync('/var/run/ls2/ls-hubd.private.pid');
 
-export class Service {
+export class Service extends LunaClient {
 	public readonly id: string;
 
 	private readonly handleOutbound: palmbus.Handle;
@@ -80,6 +73,8 @@ export class Service {
 		idleTimeout: number | null = null,
 		publicBus: boolean = true,
 	) {
+		super();
+
 		this.idleTimer = new IdleTimer(idleTimeout, this.handleQuit.bind(this));
 
 		this.id = serviceId ?? readServiceIdFromConfig();
@@ -128,7 +123,7 @@ export class Service {
 		this.methods.set(method, executor);
 	}
 
-	public subscribe<T extends AnyRecord>(
+	public override subscribe<T extends AnyRecord>(
 		uri: string,
 		params: AnyRecord,
 		callback: (response: LunaResponse<T>) => void,
@@ -142,33 +137,6 @@ export class Service {
 		});
 
 		return () => subscription.cancel();
-	}
-
-	public async* stream<T extends AnyRecord>(
-		uri: string,
-		params: AnyRecord = { subscribe: true },
-	): AsyncGenerator<LunaResponse<T>, void> {
-		const sink = new AsyncSink<LunaResponse<T>>();
-		const cancel = this.subscribe<T>(uri, params, payload => sink.push(payload));
-
-		try {
-			yield* sink;
-		} finally {
-			cancel();
-		}
-	}
-
-	public async oneshot<T extends AnyRecord>(
-		uri: string,
-		params: AnyRecord = {},
-	): Promise<LunaResponse<T>> {
-		const generator = this.stream<T>(uri, params);
-
-		const { value } = await generator.next();
-
-		await generator.return();
-
-		return value!;
 	}
 
 	public unregister() {
