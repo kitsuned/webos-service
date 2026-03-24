@@ -3,22 +3,12 @@ import palmbus from 'palmbus';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
-import { LunaClient } from '@kitsuned/webos-luna-isomorphic-client';
+import { LunaClient, type LunaResponse } from '@kitsuned/webos-luna-isomorphic-client';
 
 import { Message } from './message';
 import { IdleTimer } from './idle-timer';
 
 type AnyRecord = Record<string, any>;
-
-export type LunaErrorResponse = {
-	returnValue: false;
-	errorCode?: number;
-	errorText: string;
-};
-
-export type LunaSuccessResponse<T> = { returnValue?: true } & T;
-
-export type LunaResponse<T extends AnyRecord> = LunaSuccessResponse<T> | LunaErrorResponse;
 
 export type Executor<TReq extends AnyRecord, TResp extends AnyRecord | void, TNext extends AnyRecord> =
 	(payload: TReq, message: Message<TReq>) =>
