@@ -213,7 +213,7 @@ export class Service extends LunaClient {
 
 				message.respond({
 					returnValue: false,
-					errorCode: -1,
+					errorCode: -100,
 					errorText: e instanceof Error ? e.message : String(e),
 					errorStack: 'stack' in e.stack ? String(e.stack) : null,
 				});
