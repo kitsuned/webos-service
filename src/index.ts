@@ -79,19 +79,20 @@ export class Service extends LunaClient {
 
 		this.id = serviceId ?? readServiceIdFromConfig();
 
-		if (isLegacyBus) {
-			this.handlePublic = new palmbus.Handle(this.id, true);
-			this.handlePublic.addListener('request', this.handleRequest.bind(this));
-			this.handlePublic.addListener('cancel', this.handleCancel.bind(this));
-
-			this.handlePrivate = new palmbus.Handle(this.id, false);
-			this.handlePrivate.addListener('request', this.handleRequest.bind(this));
-			this.handlePrivate.addListener('cancel', this.handleCancel.bind(this));
-		} else {
-			const handle = new palmbus.Handle(this.id);
+		const register = (...params: ConstructorParameters<typeof palmbus.Handle>) => {
+			const handle = new palmbus.Handle(...params);
 
 			handle.addListener('request', this.handleRequest.bind(this));
 			handle.addListener('cancel', this.handleCancel.bind(this));
+
+			return handle;
+		};
+
+		if (isLegacyBus) {
+			this.handlePublic = register(this.id, true);
+			this.handlePrivate = register(this.id, false);
+		} else {
+			const handle = register(this.id);
 
 			this.handlePublic = handle;
 			this.handlePrivate = handle;
