@@ -12,12 +12,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@kitsuned/webos-luna-isomorphic-client@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "@kitsuned/webos-luna-isomorphic-client@npm:1.0.0"
+"@kitsuned/webos-luna-isomorphic-client@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "@kitsuned/webos-luna-isomorphic-client@npm:1.1.0"
   dependencies:
     "@kitsuned/async-utils": "npm:^1.0.0"
-  checksum: 10/18757e1d4f25247dcb69c37218f06e2bab039d4a578ee1b58ae88a9eb1b1846b4056bd6198e8d0845858685720e6a169f3cd5b4cb4f2b8facd9b2eacbcfd0f57
+  checksum: 10/6bcfac7c5bbf60539aa14a5e41694e7c8f8a1cdc71ec05d650e7208e877d59211c0bd39beaf1594895f4bab34280d69c64b695aa4001b9d575c2f5a249a65b43
   languageName: node
   linkType: hard
 
@@ -25,7 +25,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@kitsuned/webos-service@workspace:."
   dependencies:
-    "@kitsuned/webos-luna-isomorphic-client": "npm:^1.0.0"
+    "@kitsuned/webos-luna-isomorphic-client": "npm:^1.1.0"
     "@types/node": "npm:25.4.0"
     typescript: "npm:5.9.3"
   languageName: unknown

@@ -46,7 +46,11 @@ function readServiceIdFromConfig(): string {
 
 export const isLegacyBus = existsSync('/var/run/ls2/ls-hubd.private.pid');
 
-export class Service extends LunaClient {
+type ExtraRequestOptions = {
+	bus?: 'public' | 'private';
+};
+
+export class Service extends LunaClient<ExtraRequestOptions> {
 	public readonly id: string;
 
 	private readonly handleOutbound: palmbus.Handle;
@@ -118,8 +122,9 @@ export class Service extends LunaClient {
 		uri: string,
 		params: AnyRecord,
 		callback: (response: LunaResponse<T>) => void,
+		options: ExtraRequestOptions = {},
 	): () => void {
-		const subscription = this.handleOutbound.subscribe(uri, JSON.stringify(params));
+		const subscription = this.getHandleByName(options.bus).subscribe(uri, JSON.stringify(params));
 
 		subscription.addListener('response', pMessage => {
 			const message = Message.fromPalmMessage<T>(pMessage);
@@ -130,7 +135,7 @@ export class Service extends LunaClient {
 		return () => subscription.cancel();
 	}
 
-	public unregister() {
+	public unregister(): void {
 		this.pending.clear();
 		this.handleOutbound.unregister();
 	}
@@ -142,7 +147,7 @@ export class Service extends LunaClient {
 	>(
 		executor: ReturnType<Executor<TReq, TResp, TNext>>,
 		message: Message<TReq>,
-	) {
+	): Promise<void> {
 		if (typeof executor !== 'object') {
 			executor = {} as TResp;
 		}
@@ -225,9 +230,20 @@ export class Service extends LunaClient {
 		}
 	}
 
-	private handleQuit() {
+	private handleQuit(): void {
 		this.handleOutbound.unregister();
 
 		process.nextTick(() => process.exit(0));
+	}
+
+	private getHandleByName(bus?: ExtraRequestOptions['bus']): palmbus.Handle {
+		switch (bus) {
+			case 'public':
+				return this.handlePublic;
+			case 'private':
+				return this.handlePrivate;
+			default:
+				return this.handleOutbound;
+		}
 	}
 }
