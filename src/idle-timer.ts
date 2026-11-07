@@ -9,8 +9,9 @@ export class IdleTimer {
 		if (idleTimeout) {
 			this.timer = setTimeout(this.tick.bind(this), idleTimeout * 1000);
 		} else {
-			// keep process alive by resuming stdin stream
-			process.stdin.resume();
+			// LS2 starts services with stdin at EOF, so resuming it cannot
+			// keep the event loop alive. Use a referenced timer instead.
+			setInterval(() => {}, 0x7fffffff);
 		}
 	}
 
